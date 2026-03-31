@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Emergent Language — Live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:       #080b10;
+  --surface:  #0e1218;
+  --border:   #1a2030;
+  --text:     #c8d0e0;
+  --muted:    #3a4555;
+  --accent:   #4fffb0;
+  --accent2:  #7c6fff;
+  --red:      #ff5566;
+  --amber:    #ffb830;
+  --mono:     'Space Mono', monospace;
+  --sans:     'DM Sans', sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* grid noise overlay */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.015) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none; z-index: 0;
+}
+
+.layout {
+  position: relative; z-index: 1;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  grid-template-rows: 56px 1fr;
+  grid-template-areas: "header header" "sidebar main";
+  min-height: 100vh;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* ── header ── */
+header {
+  grid-area: header;
+  display: flex; align-items: center; gap: 20px;
+  padding: 0 28px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(8,11,16,0.9);
+  backdrop-filter: blur(12px);
+  position: sticky; top: 0; z-index: 10;
+}
+.logo {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--accent);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.pill {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--muted);
+  color: var(--muted);
+  letter-spacing: .08em;
+}
+.pill.live { border-color: var(--accent); color: var(--accent); animation: pulse-pill 2s infinite; }
+.pill.done { border-color: var(--accent2); color: var(--accent2); }
+@keyframes pulse-pill {
+  0%,100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+.header-stats {
+  margin-left: auto;
+  display: flex; gap: 28px;
+}
+.hstat { text-align: right; }
+.hstat-val { font-family: var(--mono); font-size: 18px; color: var(--accent); }
+.hstat-label { font-size: 10px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+
+/* ── sidebar ── */
+aside {
+  grid-area: sidebar;
+  border-right: 1px solid var(--border);
+  padding: 20px 16px;
+  display: flex; flex-direction: column; gap: 20px;
+  position: sticky; top: 56px;
+  height: calc(100vh - 56px);
+  overflow-y: auto;
+}
+
+.section-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+/* progress ring */
+.ring-wrap {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.ring-svg { transform: rotate(-90deg); }
+.ring-track { fill: none; stroke: var(--border); stroke-width: 6; }
+.ring-fill  { fill: none; stroke: var(--accent); stroke-width: 6;
+              stroke-linecap: round; transition: stroke-dashoffset .4s; }
+.ring-center { text-align: center; }
+.ring-pct  { font-family: var(--mono); font-size: 22px; color: var(--accent); }
+.ring-sub  { font-size: 11px; color: var(--muted); }
+
+/* accuracy bars */
+.acc-bar-wrap { display: flex; flex-direction: column; gap: 8px; }
+.acc-row { display: flex; flex-direction: column; gap: 4px; }
+.acc-row-top { display: flex; justify-content: space-between; font-size: 11px; }
+.acc-row-label { color: var(--muted); }
+.acc-row-val { font-family: var(--mono); }
+.bar-track { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.bar-fill-el { height: 100%; border-radius: 2px; transition: width .5s cubic-bezier(.4,0,.2,1); }
+
+/* entropy gauge */
+.entropy-wrap { display: flex; flex-direction: column; gap: 6px; }
+.entropy-track {
+  height: 8px; border-radius: 4px; overflow: hidden;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--amber) 50%, var(--red) 100%);
+  position: relative;
+}
+.entropy-cursor {
+  position: absolute; top: -4px;
+  width: 4px; height: 16px;
+  background: white;
+  border-radius: 2px;
+  transition: left .5s;
+  box-shadow: 0 0 6px rgba(255,255,255,.6);
+}
+.entropy-label { font-size: 11px; color: var(--accent); font-family: var(--mono); }
+
+/* last round */
+.round-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 12px;
+}
+.round-row { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; }
+.round-key { color: var(--muted); font-size: 11px; }
+.round-val { font-family: var(--mono); font-size: 12px; }
+.round-val.correct { color: var(--accent); }
+.round-val.wrong   { color: var(--red); }
+
+/* loss display */
+.loss-val {
+  font-family: var(--mono);
+  font-size: 28px;
+  color: var(--amber);
+  text-align: center;
+}
+
+/* ── main ── */
+main {
+  grid-area: main;
+  padding: 24px 28px;
+  display: flex; flex-direction: column; gap: 20px;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px 22px;
+}
+.panel-title {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+/* chart */
+#chartWrap { height: 180px; position: relative; }
+
+/* language map */
+.lang-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
+}
+.lang-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 6px;
+  transition: border-color .3s, transform .2s;
+}
+.lang-card:hover { transform: translateY(-2px); }
+.lang-obj { font-size: 11px; font-weight: 500; }
+.lang-arrow { font-size: 10px; color: var(--muted); }
+.lang-sym { font-family: var(--mono); font-size: 14px; font-weight: 700; }
+
+/* heatmap */
+.heatmap-table { width: 100%; border-collapse: separate; border-spacing: 4px; }
+.heatmap-table th {
+  font-family: var(--mono); font-size: 9px; letter-spacing: .08em;
+  color: var(--muted); text-transform: uppercase; text-align: center;
+  padding: 4px;
+}
+.heatmap-table td {
+  text-align: center; padding: 8px 4px;
+  border-radius: 6px; font-family: var(--mono); font-size: 11px;
+  transition: background .5s, color .3s;
+}
+.heatmap-table td.row-head {
+  text-align: right; padding-right: 12px;
+  font-size: 10px; color: var(--muted); background: transparent !important;
+}
+
+/* sparkline row */
+.spark-row {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+.spark-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.spark-label { font-size: 10px; color: var(--muted); font-family: var(--mono); }
+.spark-bar-track { height: 32px; display: flex; align-items: flex-end; gap: 1px; }
+.spark-segment { flex: 1; border-radius: 2px 2px 0 0; transition: height .4s, background .3s; min-height: 2px; }
+
+/* waiting state */
+.waiting {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 200px; gap: 12px;
+}
+.waiting-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+  animation: blink 1.2s ease-in-out infinite;
+}
+.waiting-dot:nth-child(2) { animation-delay: .2s; }
+.waiting-dot:nth-child(3) { animation-delay: .4s; }
+.waiting-dots { display: flex; gap: 8px; }
+@keyframes blink { 0%,80%,100%{opacity:0} 40%{opacity:1} }
+.waiting-text { font-family: var(--mono); font-size: 12px; color: var(--muted); letter-spacing: .08em; }
+
+/* flash animation for correct/wrong */
+@keyframes flash-green { 0%,100%{background:var(--surface)} 50%{background:rgba(79,255,176,.08)} }
+@keyframes flash-red   { 0%,100%{background:var(--surface)} 50%{background:rgba(255,85,102,.08)} }
+.flash-correct { animation: flash-green .6s ease; }
+.flash-wrong   { animation: flash-red .6s ease; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- ── HEADER ── -->
+<header>
+  <span class="logo">Emergent Lang</span>
+  <span class="pill live" id="statusPill">TRAINING</span>
+  <div class="header-stats">
+    <div class="hstat">
+      <div class="hstat-val" id="hAcc">—</div>
+      <div class="hstat-label">accuracy</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-val" id="hEp">—</div>
+      <div class="hstat-label">episode</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-val" id="hLift" style="color:var(--accent2)">—</div>
+      <div class="hstat-label">lift vs chance</div>
+    </div>
+  </div>
+</header>
+
+<!-- ── SIDEBAR ── -->
+<aside>
+
+  <div>
+    <div class="section-label">Progress</div>
+    <div class="ring-wrap">
+      <svg class="ring-svg" width="100" height="100" viewBox="0 0 100 100">
+        <circle class="ring-track" cx="50" cy="50" r="42"/>
+        <circle class="ring-fill" id="ringFill" cx="50" cy="50" r="42"
+          stroke-dasharray="264" stroke-dashoffset="264"/>
+      </svg>
+      <div class="ring-center" style="margin-top:-80px;margin-bottom:20px">
+        <div class="ring-pct" id="ringPct">0%</div>
+        <div class="ring-sub" id="ringEp">ep 0</div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="section-label">Accuracy</div>
+    <div class="acc-bar-wrap">
+      <div class="acc-row">
+        <div class="acc-row-top">
+          <span class="acc-row-label">recent (500)</span>
+          <span class="acc-row-val" id="recentVal" style="color:var(--accent)">0%</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill-el" id="recentBar" style="width:0%;background:var(--accent)"></div></div>
+      </div>
+      <div class="acc-row">
+        <div class="acc-row-top">
+          <span class="acc-row-label">overall</span>
+          <span class="acc-row-val" id="overallVal" style="color:var(--accent2)">0%</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill-el" id="overallBar" style="width:0%;background:var(--accent2)"></div></div>
+      </div>
+      <div class="acc-row">
+        <div class="acc-row-top">
+          <span class="acc-row-label">chance</span>
+          <span class="acc-row-val" id="chanceVal" style="color:var(--muted)">—</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill-el" id="chanceBar" style="width:0%;background:var(--muted)"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="section-label">Language Entropy</div>
+    <div class="entropy-wrap">
+      <div class="entropy-track">
+        <div class="entropy-cursor" id="entCursor" style="left:100%"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted)">
+        <span>settled</span><span>chaotic</span>
+      </div>
+      <div class="entropy-label" id="entLabel">waiting...</div>
+    </div>
+  </div>
+
+  <div>
+    <div class="section-label">Loss</div>
+    <div class="loss-val" id="lossVal">—</div>
+    <div style="font-size:10px;color:var(--muted);text-align:center;margin-top:4px">cross-entropy</div>
+  </div>
+
+  <div>
+    <div class="section-label">Last Round</div>
+    <div class="round-box" id="roundBox">
+      <div class="waiting" style="height:80px">
+        <div class="waiting-dots">
+          <div class="waiting-dot"></div>
+          <div class="waiting-dot"></div>
+          <div class="waiting-dot"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</aside>
+
+<!-- ── MAIN ── -->
+<main>
+
+  <div class="panel">
+    <div class="panel-title">Accuracy over training</div>
+    <div id="chartWrap">
+      <div class="waiting">
+        <div class="waiting-dots">
+          <div class="waiting-dot"></div>
+          <div class="waiting-dot"></div>
+          <div class="waiting-dot"></div>
+        </div>
+        <div class="waiting-text">waiting for training data...</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Learned language — sender mapping</div>
+    <div class="lang-grid" id="langGrid">
+      <div class="waiting" style="height:80px;grid-column:1/-1">
+        <div class="waiting-dots"><div class="waiting-dot"></div><div class="waiting-dot"></div><div class="waiting-dot"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Per-object signal history — how often each object gets each signal</div>
+    <div class="spark-row" id="sparkRow">
+      <div class="waiting" style="height:80px;grid-column:1/-1">
+        <div class="waiting-dots"><div class="waiting-dot"></div><div class="waiting-dot"></div><div class="waiting-dot"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Receiver association heatmap — how strongly each signal maps to each object</div>
+    <table class="heatmap-table" id="heatTable"></table>
+  </div>
+
+</main>
+</div>
+
+<script>
+let cfg = null;
+let chart = null;
+let chartReady = false;
+let sigHistory = null;  // [n_objects][n_symbols] running counts
+
+function initSigHistory(nObj, nSym) {
+  sigHistory = Array.from({length: nObj}, () => new Array(nSym).fill(0));
+}
+
+// ── chart setup ───────────────────────────────────────────────────────────────
+function buildChart() {
+  const wrap = document.getElementById('chartWrap');
+  wrap.innerHTML = '<canvas id="accCanvas"></canvas>';
+  const ctx = document.getElementById('accCanvas').getContext('2d');
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: 'recent accuracy',
+          data: [],
+          borderColor: '#4fffb0',
+          backgroundColor: 'rgba(79,255,176,0.06)',
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.4,
+          fill: true,
+        },
+        {
+          label: 'chance',
+          data: [],
+          borderColor: 'rgba(255,255,255,0.12)',
+          borderWidth: 1,
+          borderDash: [6,4],
+          pointRadius: 0,
+          fill: false,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      scales: {
+        x: {
+          ticks: { color:'#3a4555', maxTicksLimit: 8,
+            callback: (v,i) => chart.data.labels[i]?.toLocaleString() },
+          grid: { color: '#0e1218' }
+        },
+        y: {
+          ticks: { color:'#3a4555', callback: v => v+'%' },
+          grid: { color: '#1a2030' },
+          min: 0, max: 100
+        }
+      },
+      plugins: {
+        legend: { labels: { color:'#3a4555', boxWidth:10, font:{size:11} } }
+      }
+    }
+  });
+  chartReady = true;
+}
+
+// ── language map ──────────────────────────────────────────────────────────────
+function buildLangGrid(langMap) {
+  const grid = document.getElementById('langGrid');
+  grid.innerHTML = '';
+  langMap.forEach((symIdx, objIdx) => {
+    const oc = cfg.obj_colors[objIdx];
+    const sc = cfg.sym_colors[symIdx];
+    const card = document.createElement('div');
+    card.className = 'lang-card';
+    card.style.borderColor = oc + '40';
+    card.innerHTML = `
+      <div class="lang-obj" style="color:${oc}">${cfg.obj_names[objIdx]}</div>
+      <div class="lang-arrow">sends signal</div>
+      <div class="lang-sym" style="color:${sc}">${cfg.sym_names[symIdx]}</div>`;
+    grid.appendChild(card);
+  });
+}
+
+// ── heatmap ───────────────────────────────────────────────────────────────────
+function buildHeatmap(heatmap) {
+  const tbl = document.getElementById('heatTable');
+  if (!tbl.querySelector('thead')) {
+    let head = '<thead><tr><th></th>' +
+      cfg.obj_names.map(n=>`<th>${n}</th>`).join('') + '</tr></thead><tbody></tbody>';
+    tbl.innerHTML = head;
+  }
+  const tbody = tbl.querySelector('tbody');
+  tbody.innerHTML = '';
+  heatmap.forEach((row, si) => {
+    const tr = document.createElement('tr');
+    const th = document.createElement('td');
+    th.className = 'row-head';
+    th.textContent = cfg.sym_names[si];
+    tr.appendChild(th);
+    row.forEach(v => {
+      const td = document.createElement('td');
+      const alpha = (v * 0.85 + 0.05).toFixed(2);
+      td.style.background = `rgba(79,255,176,${alpha})`;
+      td.style.color = v > 0.5 ? '#080b10' : '#3a4555';
+      td.textContent = v.toFixed(2);
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+// ── per-object sparklines ─────────────────────────────────────────────────────
+function buildSparkRow(langMap) {
+  if (!sigHistory) return;
+  // update counts from current lang map snapshot
+  langMap.forEach((symIdx, objIdx) => { sigHistory[objIdx][symIdx]++; });
+
+  const row = document.getElementById('sparkRow');
+  row.innerHTML = '';
+  sigHistory.forEach((counts, objIdx) => {
+    const total = counts.reduce((a,b)=>a+b,0) || 1;
+    const card  = document.createElement('div');
+    card.className = 'spark-card';
+    const oc = cfg.obj_colors[objIdx];
+    card.innerHTML = `<div class="lang-obj" style="color:${oc};font-size:11px">${cfg.obj_names[objIdx]}</div>
+      <div class="spark-label">signal usage</div>
+      <div class="spark-bar-track" id="spark-${objIdx}"></div>
+      <div style="display:flex;justify-content:space-between;margin-top:4px">
+        ${cfg.sym_names.map((n,i) => `<span style="font-size:9px;color:${cfg.sym_colors[i]};font-family:monospace">${n}</span>`).join('')}
+      </div>`;
+    row.appendChild(card);
+
+    const track = card.querySelector(`#spark-${objIdx}`);
+    counts.forEach((c, si) => {
+      const seg = document.createElement('div');
+      seg.className = 'spark-segment';
+      const h = Math.max(4, (c/total)*32);
+      seg.style.height = h+'px';
+      seg.style.background = cfg.sym_colors[si];
+      seg.style.opacity = c/total > 0.05 ? '1' : '0.2';
+      track.appendChild(seg);
+    });
+  });
+}
+
+// ── last round ────────────────────────────────────────────────────────────────
+function updateRound(r) {
+  const box = document.getElementById('roundBox');
+  const oc  = cfg.obj_colors[r.target];
+  const sc  = cfg.sym_colors[r.signal];
+  const correct = r.correct;
+  box.innerHTML = `
+    <div class="round-row">
+      <span class="round-key">target</span>
+      <span class="round-val" style="color:${oc}">${cfg.obj_names[r.target]}</span>
+    </div>
+    <div class="round-row">
+      <span class="round-key">signal sent</span>
+      <span class="round-val" style="color:${sc}">${cfg.sym_names[r.signal]}</span>
+    </div>
+    <div class="round-row">
+      <span class="round-key">receiver picked</span>
+      <span class="round-val ${correct?'correct':'wrong'}">${cfg.obj_names[r.choice]}</span>
+    </div>
+    <div class="round-row" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
+      <span class="round-key">result</span>
+      <span class="round-val ${correct?'correct':'wrong'}">${correct?'✓ correct':'✗ wrong'}</span>
+    </div>`;
+  box.classList.remove('flash-correct','flash-wrong');
+  void box.offsetWidth;
+  box.classList.add(correct ? 'flash-correct' : 'flash-wrong');
+}
+
+// ── entropy ───────────────────────────────────────────────────────────────────
+function updateEntropy(pct) {
+  document.getElementById('entCursor').style.left = pct + '%';
+  let label;
+  if (pct > 75)      label = 'chaotic — no language yet';
+  else if (pct > 45) label = 'forming — patterns emerging';
+  else if (pct > 20) label = 'settling — language crystallising';
+  else               label = 'settled — stable language';
+  document.getElementById('entLabel').textContent = label;
+}
+
+// ── main render ───────────────────────────────────────────────────────────────
+let lastEp = -1;
+function render(data) {
+  if (!cfg) {
+    cfg = data.config;
+    initSigHistory(cfg.n_objects, cfg.n_symbols);
+    document.getElementById('chanceVal').textContent = cfg.chance + '%';
+    document.getElementById('chanceBar').style.width = cfg.chance + '%';
+    buildChart();
+  }
+
+  const ep     = data.ep;
+  const done   = data.done;
+  const recent = data.recent_acc;
+  const overall= data.overall_acc;
+  const chance = cfg.chance;
+
+  // header
+  const lift = (recent - chance).toFixed(1);
+  document.getElementById('hAcc').textContent  = recent + '%';
+  document.getElementById('hEp').textContent   = ep.toLocaleString();
+  document.getElementById('hLift').textContent = '+' + lift + '%';
+
+  // status pill
+  const pill = document.getElementById('statusPill');
+  if (done) { pill.textContent='DONE'; pill.className='pill done'; }
+
+  // ring
+  const pct = ep / cfg.episodes * 100;
+  const circ = 2 * Math.PI * 42;
+  document.getElementById('ringFill').style.strokeDashoffset = circ - (circ * pct/100);
+  document.getElementById('ringPct').textContent = pct.toFixed(1) + '%';
+  document.getElementById('ringEp').textContent  = 'ep ' + ep.toLocaleString();
+
+  // accuracy bars
+  document.getElementById('recentVal').textContent  = recent + '%';
+  document.getElementById('recentBar').style.width  = recent + '%';
+  const rcolor = recent >= 80 ? '#4fffb0' : recent >= 50 ? '#ffb830' : '#ff5566';
+  document.getElementById('recentBar').style.background = rcolor;
+  document.getElementById('recentVal').style.color = rcolor;
+
+  document.getElementById('overallVal').textContent  = overall + '%';
+  document.getElementById('overallBar').style.width  = overall + '%';
+
+  // loss
+  document.getElementById('lossVal').textContent = data.loss;
+
+  // entropy
+  updateEntropy(data.entropy_pct);
+
+  // chart
+  if (chartReady && data.chart.length > lastEp) {
+    const newPts = data.chart.slice(chart.data.labels.length);
+    newPts.forEach(p => {
+      chart.data.labels.push(p.ep);
+      chart.data.datasets[0].data.push(p.acc);
+      chart.data.datasets[1].data.push(cfg.chance);
+    });
+    if (newPts.length > 0) chart.update('none');
+  }
+
+  // lang map
+  buildLangGrid(data.lang_map);
+
+  // sparklines
+  if (ep !== lastEp) buildSparkRow(data.lang_map);
+
+  // heatmap
+  buildHeatmap(data.heatmap);
+
+  // last round
+  if (data.last_round && data.last_round.lineup) updateRound(data.last_round);
+
+  lastEp = ep;
+}
+
+// ── SSE connection ────────────────────────────────────────────────────────────
+const evtSource = new EventSource('/stream');
+evtSource.onmessage = e => {
+  try {
+    const data = JSON.parse(e.data);
+    render(data);
+    if (data.done) evtSource.close();
+  } catch(err) { console.error(err); }
+};
+evtSource.onerror = () => {
+  // try polling fallback
+  evtSource.close();
+  setInterval(async () => {
+    const r = await fetch('/state');
+    const d = await r.json();
+    render(d);
+  }, 500);
+};
+</script>
+</body>
+</html>
