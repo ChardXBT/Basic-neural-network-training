@@ -1,4 +1,4 @@
-# Basic Neural Network Training Feedforward Neural Network (FNN)
+# Basic Neural Network Training: Feedforward Neural Network (FNN)
 
 ## Description
 
