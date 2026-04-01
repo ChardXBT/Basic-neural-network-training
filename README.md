@@ -25,30 +25,6 @@ All hyper-parameters and display options are defined as module-level constants a
 | `PORT` | `7331` | HTTP server port for the dashboard |
 
 ---
-
-## Dashboard
-
-The live dashboard is served at `http://localhost:7331` and provides the following views:
-
-- **Accuracy chart** — rolling recent accuracy and overall accuracy plotted over training episodes.
-- **Language map** — the discrete symbol each object is consistently mapped to by the Sender.
-- **Receiver heatmap** — a normalised grid showing how strongly the Receiver associates each signal with each object.
-- **Last round** — the target object, emitted signal, candidate lineup, and whether the Receiver's choice was correct.
-- **Entropy** — the percentage of maximum Shannon entropy in the Sender's output distribution, indicating how deterministic the learned protocol is.
-
-State is pushed from the training thread to the browser via a Server-Sent Events (`/stream`) endpoint and polled at 300 ms intervals.
-
----
-
-## Project Structure
-
-```
-.
-├── model.py         # Sender and Receiver network definitions
-├── train.py         # Training loop, HTTP server, and dashboard state management
-└── dashboard.html   # Browser-based live training dashboard
-```
-
 ### `model.py`
 
 Defines two `torch.nn.Module` subclasses:
