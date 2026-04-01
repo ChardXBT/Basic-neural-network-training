@@ -90,7 +90,7 @@ def get_language_map(sender):
     with torch.no_grad():
         for i in range(N_OBJECTS):
             obj = torch.zeros(N_OBJECTS); obj[i] = 1.0
-            mapping.append(sender.forward(obj).argmax().item())
+            mapping.append(sender.net(obj).argmax().item())
     return mapping
 
 def get_entropy(sender):
